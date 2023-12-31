@@ -4,4 +4,5 @@ project ("ChatAPP")
 
 set(CXX_STANDARD_REQUIRED 14)
 
-add_executable(${PROJECT_NAME} src/main.cpp)
+add_subdirectory(client_unix)
+add_subdirectory(unix_server)
