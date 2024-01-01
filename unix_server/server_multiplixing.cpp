@@ -109,9 +109,10 @@ void server(){
     for(;;){
         refresh_fd_set(&readFds);
         printf("Waiting on select()\n");
-        select(getMaxFd() + 1,&readFds, NULL, NULL, NULL); // Blocking
         // Blocking will happen here because the server is waiting for a client to connect
+        select(getMaxFd() + 1,&readFds, NULL, NULL, NULL);
         if(FD_ISSET(server_socket,&readFds)){
+            printf("New connection recieved\n");
             data_socket = accept(server_socket,NULL,NULL); // Client handler will be established
             if(data_socket == -1){
                 perror("accept");
@@ -120,35 +121,45 @@ void server(){
             printf("Connection accepted from the client\n");
             add_monitored_fd_set(data_socket);
         }
-        
-        printf("Connection accepted from the client: %d\n",data_socket);
-        for(;;){
-            memset(buffer,0,sizeof(buffer));
-            // Wait for next data packet
-            ret = read(data_socket,buffer,sizeof(buffer));
-            if(ret == -1){
-                perror("read");
-                exit(EXIT_FAILURE);
-            }
+        else{
+            int comm_fd = -1;
+            for(size_t i=0;i<MAX_CLIENT_SUPPORTED;++i){
+                if(FD_ISSET(monitored_fd_set[i],&readFds)){
+                    comm_fd = monitored_fd_set[i];
+                    memset(buffer,0,sizeof(buffer));
+                    // Wait for next data packet
+                    ret = read(comm_fd,buffer,sizeof(buffer));
+                    if(ret == -1){
+                        perror("read");
+                        exit(EXIT_FAILURE);
+                    }
 
-            memcpy(&item,buffer,sizeof(int));
-            if(item == 0) break;
-            result += item;
+                    memcpy(&item,buffer,sizeof(int));
+                    if(item == 0){
+                        memset(buffer,0,sizeof(buffer));
+                        sprintf(buffer,"Result %d",client_result[i]);
+                        ret = write(comm_fd,buffer,sizeof(buffer));
+                        if(ret == -1){
+                            perror("write");
+                            exit(EXIT_FAILURE);
+                        }
+
+                        close(comm_fd);
+                        remove_monitored_fd_set(comm_fd);
+                        client_result[i] = 0; // go to select block
+                        // continue;
+                    } 
+                    client_result[i] += item;
+                }
+            }
         }
-        memset(buffer,0,sizeof(buffer));
-        sprintf(buffer,"Result %d",result);
-        ret = write(data_socket,buffer,sizeof(buffer));
-        if(ret == -1){
-            perror("write");
-            exit(EXIT_FAILURE);
-        }
-        // std::this_thread::sleep_for(std::chrono::milliseconds(500));
-        close(data_socket);
+        
     }
 
     if(server_socket != -1){
         close(server_socket);
     }
+    remove_monitored_fd_set(server_socket);
 
     unlink(SOCKET_NAME);
 //    send(client_socket,result,sizeof(int),0);

@@ -4,4 +4,4 @@ project ("ServerChatAPP")
 
 set(CXX_STANDARD_REQUIRED 14)
 
-add_executable(${PROJECT_NAME} server.cpp)
+add_executable(${PROJECT_NAME} server_multiplixing.cpp)
